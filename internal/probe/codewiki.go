@@ -2,7 +2,6 @@ package probe
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"

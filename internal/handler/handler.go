@@ -2,37 +2,43 @@ package handler
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/dong4j/starcat-wiki-api/internal/model"
 )
 
-func writeJSON(w http.ResponseWriter, data interface{}) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(model.Envelope[interface{}]{
-		SchemaVersion: 1,
-		Data:          data,
-	})
+func writeJSON[T any](w http.ResponseWriter, data T) {
+	writeJSONWithMeta(w, data, nil)
 }
 
-func writeJSONWithMeta(w http.ResponseWriter, data interface{}, meta *model.Meta) {
+func writeJSONWithMeta[T any](w http.ResponseWriter, data T, meta *model.Meta) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(model.Envelope[interface{}]{
+	w.WriteHeader(http.StatusOK)
+
+	env := model.Envelope[T]{
 		SchemaVersion: 1,
 		Data:          data,
 		Meta:          meta,
-	})
+	}
+	if err := json.NewEncoder(w).Encode(env); err != nil {
+		log.Printf("[handler] failed to encode envelope: %v", err)
+	}
 }
 
 func writeError(w http.ResponseWriter, status int, code, msg string, details interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(model.ErrorEnvelope{
+
+	env := model.ErrorEnvelope{
 		SchemaVersion: 1,
 		Error: model.ErrorResponse{
 			Code:    code,
 			Message: msg,
 			Details: details,
 		},
-	})
+	}
+	if err := json.NewEncoder(w).Encode(env); err != nil {
+		log.Printf("[handler] failed to encode error envelope: %v", err)
+	}
 }
