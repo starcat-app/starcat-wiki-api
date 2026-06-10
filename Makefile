@@ -2,7 +2,7 @@
 # Makefile - 统一项目命令入口
 # ===========================================
 
-BINARY_NAME := server
+BINARY_NAME := wiki
 BIN_DIR := bin
 MAIN_PATH := ./cmd/server
 PKG := ./...

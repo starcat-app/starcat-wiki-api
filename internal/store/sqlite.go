@@ -5,11 +5,23 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log"
+	"os"
+	"strconv"
 	"time"
 
 	_ "modernc.org/sqlite"
 	"github.com/dong4j/starcat-wiki-api/internal/probe"
 )
+
+func getEnvInt(key string, def int) int {
+	if s := os.Getenv(key); s != "" {
+		if v, err := strconv.Atoi(s); err == nil {
+			return v
+		}
+	}
+	return def
+}
+
 
 type SQLiteStore struct {
 	db *sql.DB

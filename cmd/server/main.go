@@ -12,6 +12,7 @@ import (
 	"github.com/dong4j/starcat-wiki-api/internal/handler"
 	"github.com/dong4j/starcat-wiki-api/internal/middleware"
 	"github.com/dong4j/starcat-wiki-api/internal/probe"
+	"github.com/dong4j/starcat-wiki-api/internal/scheduler"
 	"github.com/dong4j/starcat-wiki-api/internal/store"
 )
 
@@ -50,6 +51,9 @@ func main() {
 	baseReq := probe.NewBaseRequest(ua)
 	probes := probe.DefaultRegistry(baseReq, enableRPC)
 
+	// Scheduler
+	sch := scheduler.New(sqliteStore)
+
 	// Handler
 	probeHandler := handler.NewProbeHandler(sqliteStore, probes)
 
@@ -61,6 +65,8 @@ func main() {
 	mux.HandleFunc("GET /healthz", healthzHandler)
 	mux.Handle("GET /api/v1/wikis", authMW.Wrap(http.HandlerFunc(probeHandler.HandleProbeV1)))
 	mux.Handle("POST /api/v1/wikis/batch", authMW.Wrap(http.HandlerFunc(probeHandler.HandleProbeBatchV1)))
+	mux.Handle("POST /internal/sync/probe", authMW.Wrap(handler.HandleAdminSyncProbe(sch)))
+	mux.Handle("POST /internal/refresh/owner", authMW.Wrap(handler.HandleAdminRefreshOwner(sch)))
 
 	// Graceful Shutdown
 	go func() {
@@ -68,9 +74,12 @@ func main() {
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		sig := <-sigCh
 		log.Printf("Received %v, shutting down...", sig)
+		sch.Stop()
 		sqliteStore.Close()
 		os.Exit(0)
 	}()
+
+	go sch.Start()
 
 	log.Printf("starcat-wiki-api starting on port %s", port)
 	log.Fatal(http.ListenAndServe(":"+port, mux))

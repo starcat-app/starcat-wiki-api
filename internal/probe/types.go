@@ -2,6 +2,7 @@ package probe
 
 import (
 	"context"
+	"time"
 )
 
 type Source string
@@ -24,14 +25,15 @@ const (
 )
 
 type ProbeResult struct {
-	Source         Source   `json:"source"`
-	Status         Status   `json:"status"`
-	URL            string   `json:"url"`
-	Confidence     string   `json:"confidence"`
-	ProbeMethod    string   `json:"probeMethod"`
-	HTTPStatus     *int     `json:"httpStatus,omitempty"`
-	MatchedSignals []string `json:"matchedSignals,omitempty"`
-	Error          string   `json:"error,omitempty"`
+	Source         Source     `json:"source"`
+	Status         Status     `json:"status"`
+	URL            string     `json:"url"`
+	Confidence     string     `json:"confidence"`
+	ProbeMethod    string     `json:"probeMethod"`
+	HTTPStatus     *int       `json:"httpStatus,omitempty"`
+	MatchedSignals []string   `json:"matchedSignals,omitempty"`
+	Error          string     `json:"error,omitempty"`
+	ExpiresAt      *time.Time `json:"-"` // Not serialized to client
 }
 
 type Probe interface {
