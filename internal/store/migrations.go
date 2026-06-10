@@ -2,42 +2,16 @@ package store
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
-
-	_ "modernc.org/sqlite"
 )
 
-func migrate(db *sql.DB) error {
-	var version int
-	if err := db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
-		return err
-	}
-	log.Printf("[migrate] current schema version: %d", version)
-
-	if version < 1 {
-		if err := migrateV1(db); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func setUserVersion(tx *sql.Tx, version int) error {
-	_, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d", version))
-	return err
-}
-
-func migrateV1(db *sql.DB) error {
-	log.Println("[migrate] running migrateV1: create doc_probes table")
-
-	tx, err := db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	_, err = tx.Exec(`
+// createSchema 初始化 wiki-api 全部数据表与索引。
+//
+// 全新服务,无版本迁移:任何现存 *.db 直接 rm 即可。首启动调一次
+// CREATE TABLE IF NOT EXISTS 即可,不做 destructive migration。
+func createSchema(db *sql.DB) error {
+	log.Println("[migrate] createSchema: doc_probes table")
+	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS doc_probes (
 			id              INTEGER PRIMARY KEY AUTOINCREMENT,
 			owner           TEXT NOT NULL,
@@ -53,16 +27,9 @@ func migrateV1(db *sql.DB) error {
 			expires_at      TEXT NOT NULL,
 			UNIQUE(owner, repo, source)
 		);
+
 		CREATE INDEX IF NOT EXISTS idx_doc_probes_lookup  ON doc_probes(owner, repo, expires_at);
 		CREATE INDEX IF NOT EXISTS idx_doc_probes_refresh ON doc_probes(expires_at);
 	`)
-	if err != nil {
-		return err
-	}
-
-	if err := setUserVersion(tx, 1); err != nil {
-		return err
-	}
-
-	return tx.Commit()
+	return err
 }
