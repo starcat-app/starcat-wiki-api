@@ -42,13 +42,11 @@ func (b *BaseRequest) setHeaders(req *http.Request) {
 	req.Header.Set("User-Agent", b.userAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.8")
-	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
 	req.Header.Set("Sec-Fetch-Dest", "document")
 	req.Header.Set("Sec-Fetch-Mode", "navigate")
 	req.Header.Set("Sec-Fetch-Site", "none")
 	req.Header.Set("Sec-Fetch-User", "?1")
 }
-
 func RandomDelay(min, max int) {
 	if max <= min {
 		return

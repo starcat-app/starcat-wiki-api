@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strings"
 )
 
 type CodeWikiProbe struct {
-	client *BaseRequest
+	client    *BaseRequest
 	enableRPC bool
 }
 
@@ -65,56 +66,84 @@ func (p *CodeWikiProbe) urlProbe(ctx context.Context, owner, repo string, result
 
 func (p *CodeWikiProbe) rpcProbe(ctx context.Context, owner, repo string, result ProbeResult) ProbeResult {
 	result.ProbeMethod = "batchexecute_fetch"
-	
+
 	ghURL := fmt.Sprintf("https://github.com/%s/%s", owner, repo)
-	// RPC payload: [["VSX6ub","[\"https://github.com/owner/repo\"]",null,"generic"]]
-	payload := fmt.Sprintf(`[["VSX6ub","[\"%s\"]",null,"generic"]]`, ghURL)
-	
+	fullName := fmt.Sprintf("%s/%s", owner, repo)
+
+	// source-path 必须 URL 编码：/github.com/{owner}/{repo} → %2Fgithub.com%2F{owner}%2F{repo}
+	encodedPath := url.QueryEscape(fmt.Sprintf("/github.com/%s/%s", owner, repo))
+
+	// f.req 载荷：batchexecute RPC 格式，3 层括号，传入完整 GitHub URL
+	payload := fmt.Sprintf(`[[["VSX6ub","[\"%s\"]",null,"generic"]]]`, ghURL)
 	formData := url.Values{}
 	formData.Set("f.req", payload)
-	
-	rpcURL := "https://codewiki.google/_/BoqAngularSdlcAgentsUi/data/batchexecute?rpcids=VSX6ub&rt=c&source-path=/github.com/" + owner + "/" + repo
-	
+
+	// 构造 RPC URL：source-path 已编码，rt=c 表示紧凑响应
+	rpcURL := fmt.Sprintf(
+		"https://codewiki.google/_/BoqAngularSdlcAgentsUi/data/batchexecute?rpcids=VSX6ub&source-path=%s&rt=c&_reqid=%d",
+		encodedPath, rand.Intn(9000)+1000,
+	)
+
 	req, err := http.NewRequestWithContext(ctx, "POST", rpcURL, strings.NewReader(formData.Encode()))
 	if err != nil {
 		return p.urlProbe(ctx, owner, repo, result)
 	}
-	
+
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("User-Agent", p.client.userAgent)
-	
-	resp, err := http.DefaultClient.Do(req)
+
+	resp, err := p.client.client.Do(req)
 	if err != nil {
 		return p.urlProbe(ctx, owner, repo, result)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return p.urlProbe(ctx, owner, repo, result)
 	}
-	
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return p.urlProbe(ctx, owner, repo, result)
 	}
-	
+
 	bodyStr := string(body)
+	// 去掉 Google XSSI 防护前缀 )]}'\n
+	bodyStr, _ = strings.CutPrefix(bodyStr, ")]}'\n")
+
 	if !strings.Contains(bodyStr, "wrb.fr") || !strings.Contains(bodyStr, "VSX6ub") {
 		return p.urlProbe(ctx, owner, repo, result)
 	}
-	
-	// 宽松匹配
+
+	// 信号分析
 	signals := []string{"rpc_ok"}
-	if strings.Contains(bodyStr, "canonicalUrl") && strings.Contains(bodyStr, ghURL) {
-		signals = append(signals, "canonical_url_matched")
+
+	// 1. 负向信号：不存在索引的典型特征 [null,[[null,
+	if strings.Contains(bodyStr, "[null,[[null,") {
+		result.Status = StatusNotIndexed
+		result.Confidence = "high"
+		result.MatchedSignals = []string{"marker_not_indexed_null"}
+		return result
 	}
-	
-	if strings.Contains(bodyStr, "markdown") || strings.Contains(bodyStr, "sections") {
-		signals = append(signals, "sections_found")
+
+	// 2. 正向信号 A：包含 "owner/repo" 标识
+	if strings.Contains(bodyStr, fmt.Sprintf("\"%s\"", fullName)) {
+		signals = append(signals, "marker_repo_id_matched")
 	}
-	
+
+	// 3. 正向信号 B：包含 Overview 关键字
+	if strings.Contains(bodyStr, "Overview") {
+		signals = append(signals, "marker_overview_found")
+	}
+
+	// 4. 正向信号 C：长度特征 (索引后的数据通常很大，非索引通常 < 300 字节)
+	if len(bodyStr) > 5000 {
+		signals = append(signals, "marker_large_payload")
+	}
+
 	result.MatchedSignals = signals
-	
+
+	// 判定逻辑
 	if len(signals) >= 3 {
 		result.Status = StatusIndexed
 		result.Confidence = "high"
@@ -122,9 +151,10 @@ func (p *CodeWikiProbe) rpcProbe(ctx context.Context, owner, repo string, result
 		result.Status = StatusProbablyIndexed
 		result.Confidence = "medium"
 	} else {
-		result.Status = StatusUnknown
-		result.Confidence = "low"
+		// 虽然 RPC 通了，但没匹配到核心标识
+		result.Status = StatusNotIndexed
+		result.Confidence = "high"
 	}
-	
+
 	return result
 }

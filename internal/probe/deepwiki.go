@@ -2,10 +2,9 @@ package probe
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"strings"
 )
 
 type DeepWikiProbe struct {
@@ -20,14 +19,17 @@ func (p *DeepWikiProbe) Source() Source { return SourceDeepWiki }
 func (p *DeepWikiProbe) Name() string   { return "DeepWiki" }
 
 func (p *DeepWikiProbe) Probe(ctx context.Context, owner, repo string) ProbeResult {
-	url := fmt.Sprintf("https://deepwiki.com/%s/%s", owner, repo)
+	// API 端点: https://api.devin.ai/ada/public_repo_indexing_status?repo_name=owner/repo
+	apiURL := fmt.Sprintf("https://api.devin.ai/ada/public_repo_indexing_status?repo_name=%s/%s", owner, repo)
+	pageURL := fmt.Sprintf("https://deepwiki.com/%s/%s", owner, repo)
+
 	result := ProbeResult{
 		Source:      p.Source(),
-		URL:         url,
-		ProbeMethod: "html_fingerprint",
+		URL:         pageURL, // 结果展示仍用展示页 URL
+		ProbeMethod: "json_api",
 	}
 
-	resp, err := p.client.Get(ctx, url)
+	resp, err := p.client.Get(ctx, apiURL)
 	if err != nil {
 		result.Status = StatusError
 		result.Error = err.Error()
@@ -37,56 +39,28 @@ func (p *DeepWikiProbe) Probe(ctx context.Context, owner, repo string) ProbeResu
 
 	result.HTTPStatus = &resp.StatusCode
 
-	if resp.StatusCode == http.StatusNotFound {
-		result.Status = StatusNotIndexed
-		result.Confidence = "high"
-		return result
-	}
-
-	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
-		result.Status = StatusRateLimited
-		result.Confidence = "high"
-		return result
-	}
-
 	if resp.StatusCode != http.StatusOK {
 		result.Status = StatusError
 		return result
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
-	if err != nil {
+	var data struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 		result.Status = StatusUnknown
+		result.Error = "json_decode_error"
 		return result
 	}
 
-	bodyStr := string(body)
-	backlink := fmt.Sprintf("github.com/%s/%s", owner, repo)
-	signals := []string{}
-
-	if strings.Contains(bodyStr, backlink) {
-		signals = append(signals, "backlink")
-	}
-
-	lowerBody := strings.ToLower(bodyStr)
-	keywords := []string{"last indexed", "indexed on", "overview"}
-	for _, k := range keywords {
-		if strings.Contains(lowerBody, k) {
-			signals = append(signals, strings.ReplaceAll(k, " ", "_"))
-		}
-	}
-
-	result.MatchedSignals = signals
-
-	if len(signals) >= 3 {
+	if data.Status == "completed" {
 		result.Status = StatusIndexed
 		result.Confidence = "high"
-	} else if len(signals) >= 1 {
-		result.Status = StatusProbablyIndexed
-		result.Confidence = "medium"
+		result.MatchedSignals = []string{"api_status_completed"}
 	} else {
 		result.Status = StatusNotIndexed
 		result.Confidence = "high"
+		result.MatchedSignals = []string{"api_status_" + data.Status}
 	}
 
 	return result

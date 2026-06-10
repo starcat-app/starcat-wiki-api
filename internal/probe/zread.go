@@ -2,10 +2,10 @@ package probe
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 )
 
 type ZreadProbe struct {
@@ -20,14 +20,17 @@ func (p *ZreadProbe) Source() Source { return SourceZread }
 func (p *ZreadProbe) Name() string   { return "Zread" }
 
 func (p *ZreadProbe) Probe(ctx context.Context, owner, repo string) ProbeResult {
-	url := fmt.Sprintf("https://zread.ai/%s/%s", owner, repo)
+	// API 端点: https://zread.ai/api/v1/repo/github/owner/repo
+	apiURL := fmt.Sprintf("https://zread.ai/api/v1/repo/github/%s/%s", owner, repo)
+	pageURL := fmt.Sprintf("https://zread.ai/%s/%s", owner, repo)
+
 	result := ProbeResult{
 		Source:      p.Source(),
-		URL:         url,
-		ProbeMethod: "html_fingerprint",
+		URL:         pageURL, // 结果展示仍用展示页 URL
+		ProbeMethod: "json_api",
 	}
 
-	resp, err := p.client.Get(ctx, url)
+	resp, err := p.client.Get(ctx, apiURL)
 	if err != nil {
 		result.Status = StatusError
 		result.Error = err.Error()
@@ -37,56 +40,43 @@ func (p *ZreadProbe) Probe(ctx context.Context, owner, repo string) ProbeResult 
 
 	result.HTTPStatus = &resp.StatusCode
 
-	if resp.StatusCode == http.StatusNotFound {
-		result.Status = StatusNotIndexed
-		result.Confidence = "high"
-		return result
-	}
-
-	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
-		result.Status = StatusRateLimited
-		result.Confidence = "high"
-		return result
-	}
-
 	if resp.StatusCode != http.StatusOK {
 		result.Status = StatusError
 		return result
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		result.Status = StatusUnknown
+		result.Error = "read_body_error"
 		return result
 	}
 
-	bodyStr := string(body)
-	backlink := fmt.Sprintf("github.com/%s/%s", owner, repo)
-	signals := []string{}
-
-	if strings.Contains(bodyStr, backlink) {
-		signals = append(signals, "backlink")
+	var envelope struct {
+		Code int `json:"code"`
+		Data struct {
+			Status string `json:"status"`
+		} `json:"data"`
 	}
-
-	lowerBody := strings.ToLower(bodyStr)
-	keywords := []string{"ask ai", "source code", "overview"}
-	for _, k := range keywords {
-		if strings.Contains(lowerBody, k) {
-			signals = append(signals, strings.ReplaceAll(k, " ", "_"))
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		// 如果失败,尝试记录前 100 字符帮助排查
+		snippet := string(body)
+		if len(snippet) > 100 {
+			snippet = snippet[:100]
 		}
+		result.Status = StatusUnknown
+		result.Error = fmt.Sprintf("json_decode_error: %s", snippet)
+		return result
 	}
 
-	result.MatchedSignals = signals
-
-	if len(signals) >= 3 {
+	if envelope.Data.Status == "success" {
 		result.Status = StatusIndexed
 		result.Confidence = "high"
-	} else if len(signals) >= 1 {
-		result.Status = StatusProbablyIndexed
-		result.Confidence = "medium"
+		result.MatchedSignals = []string{"api_status_success"}
 	} else {
 		result.Status = StatusNotIndexed
 		result.Confidence = "high"
+		result.MatchedSignals = []string{"api_status_" + envelope.Data.Status}
 	}
 
 	return result

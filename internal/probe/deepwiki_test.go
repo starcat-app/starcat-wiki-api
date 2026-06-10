@@ -2,88 +2,60 @@ package probe
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 )
 
+// TestDeepWikiProbe 使用真实 DeepWiki API 探测指定 GitHub 仓库是否已被索引。
+// 不依赖 mock / httptest，直接走网络请求。
 func TestDeepWikiProbe(t *testing.T) {
+	client := NewBaseRequest("")
+	probe := NewDeepWikiProbe(client)
+
 	tests := []struct {
 		name       string
-		status     int
-		body       string
+		owner      string
+		repo       string
 		wantStatus Status
 	}{
 		{
-			name:       "Indexed High",
-			status:     200,
-			body:       "<html>last indexed on some date. overview for github.com/test/repo </html>",
+			name:       "已索引 — microsoft/vscode",
+			owner:      "microsoft",
+			repo:       "vscode",
 			wantStatus: StatusIndexed,
 		},
 		{
-			name:       "Probably Indexed",
-			status:     200,
-			body:       "<html>overview of the repo.</html>",
-			wantStatus: StatusProbablyIndexed,
-		},
-		{
-			name:       "Not Indexed (404)",
-			status:     404,
-			body:       "",
+			name:       "未索引 — dong4j/self-star-list",
+			owner:      "dong4j",
+			repo:       "self-star-list",
 			wantStatus: StatusNotIndexed,
 		},
-		{
-			name:       "Rate Limited (429)",
-			status:     429,
-			body:       "",
-			wantStatus: StatusRateLimited,
-		},
-		{
-			name:       "Rate Limited (403)",
-			status:     403,
-			body:       "",
-			wantStatus: StatusRateLimited,
-		},
-		{
-			name:       "Error (500)",
-			status:     500,
-			body:       "",
-			wantStatus: StatusError,
-		},
 	}
 
-	for _, tt := range tests {
+	for i, tt := range tests {
+		if i > 0 {
+			RandomDelay(300, 800)
+		}
+
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tt.status)
-				w.Write([]byte(tt.body))
-			}))
-			defer server.Close()
+			res := probe.Probe(context.Background(), tt.owner, tt.repo)
 
-			client := &BaseRequest{client: server.Client()}
-			probe := NewDeepWikiProbe(client)
-
-			// Override the hardcoded URL generation just for test or mock transport.
-			// The easiest way without changing signature is a custom transport.
-			server.Client().Transport = &mockTransport{url: server.URL, body: []byte(tt.body), status: tt.status}
-
-			res := probe.Probe(context.Background(), "test", "repo")
 			if res.Status != tt.wantStatus {
-				t.Errorf("got %v, want %v", res.Status, tt.wantStatus)
+				t.Errorf(
+					"Probe(%s/%s): status = %v, want %v (confidence=%s, error=%s, httpStatus=%v)",
+					tt.owner, tt.repo,
+					res.Status, tt.wantStatus,
+					res.Confidence, res.Error,
+					res.HTTPStatus,
+				)
+				return
 			}
+
+			t.Logf(
+				"✓ %s/%s → status=%s confidence=%s signals=%v url=%s",
+				tt.owner, tt.repo,
+				res.Status, res.Confidence,
+				res.MatchedSignals, res.URL,
+			)
 		})
 	}
-}
-
-type mockTransport struct {
-	url    string
-	body   []byte
-	status int
-}
-
-func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	resp := httptest.NewRecorder()
-	resp.WriteHeader(m.status)
-	resp.Write(m.body)
-	return resp.Result(), nil
 }

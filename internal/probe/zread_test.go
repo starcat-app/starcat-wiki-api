@@ -2,42 +2,63 @@ package probe
 
 import (
 	"context"
-	"net/http"
 	"testing"
 )
 
+// TestZreadProbe 使用真实 Zread API 探测指定 GitHub 仓库是否已被索引。
+// 不依赖 mock，直接走网络请求。
 func TestZreadProbe(t *testing.T) {
+	// 使用真实 HTTP 客户端，自带 30s 超时和浏览器 UA
+	client := NewBaseRequest("")
+	probe := NewZreadProbe(client)
+
 	tests := []struct {
 		name       string
-		status     int
-		body       string
+		owner      string
+		repo       string
 		wantStatus Status
 	}{
 		{
-			name:       "Indexed High",
-			status:     200,
-			body:       "<html>ask ai about source code overview for github.com/test/repo </html>",
+			name:       "已索引 — microsoft/vscode",
+			owner:      "microsoft",
+			repo:       "vscode",
 			wantStatus: StatusIndexed,
 		},
 		{
-			name:       "Not Indexed (404)",
-			status:     404,
-			body:       "",
+			name:       "未索引 — dong4j/self-star-list",
+			owner:      "dong4j",
+			repo:       "self-star-list",
 			wantStatus: StatusNotIndexed,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			client := &BaseRequest{client: &http.Client{
-				Transport: &mockTransport{status: tt.status, body: []byte(tt.body)},
-			}}
-			probe := NewZreadProbe(client)
+	for i, tt := range tests {
+		// 两个 case 之间稍微等一下，避免被限流
+		if i > 0 {
+			RandomDelay(300, 800)
+		}
 
-			res := probe.Probe(context.Background(), "test", "repo")
+		t.Run(tt.name, func(t *testing.T) {
+			res := probe.Probe(context.Background(), tt.owner, tt.repo)
+
 			if res.Status != tt.wantStatus {
-				t.Errorf("got %v, want %v", res.Status, tt.wantStatus)
+				t.Errorf(
+					"Probe(%s/%s): status = %v, want %v (confidence=%s, error=%s, httpStatus=%v)",
+					tt.owner, tt.repo,
+					res.Status, tt.wantStatus,
+					res.Confidence, res.Error,
+					res.HTTPStatus,
+				)
+				return
 			}
+
+			// 成功时打印结果方便肉眼确认
+			t.Logf(
+				"✓ %s/%s → status=%s confidence=%s signals=%v url=%s",
+				tt.owner, tt.repo,
+				res.Status, res.Confidence,
+				res.MatchedSignals, res.URL,
+			)
 		})
 	}
 }
