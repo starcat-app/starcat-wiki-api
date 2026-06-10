@@ -1,0 +1,15 @@
+.git
+.github
+.idea
+.vscode
+bin/
+logs/
+*.db
+*.out
+.env
+Dockerfile
+Makefile
+README.md
+CHANGELOG.md
+TODO.md
+fly.toml
