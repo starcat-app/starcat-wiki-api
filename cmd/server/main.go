@@ -69,6 +69,9 @@ func main() {
 	// Router
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthzHandler)
+	// R-03 (2026-06-11): /api/v1/ping 专门给 Starcat 客户端「测试连接」按钮用，
+	// 在 middleware 后面挂——同时验证服务可达 + Bearer Key 正确。详见 handler/ping.go。
+	mux.Handle("GET /api/v1/ping", authMW.Wrap(handler.HandlePingV1("wiki")))
 	mux.Handle("GET /api/v1/wikis", authMW.Wrap(http.HandlerFunc(probeHandler.HandleProbeV1)))
 	mux.Handle("POST /api/v1/wikis/batch", authMW.Wrap(http.HandlerFunc(probeHandler.HandleProbeBatchV1)))
 	mux.Handle("POST /internal/sync/probe", authMW.Wrap(handler.HandleAdminSyncProbe(sch)))
@@ -93,6 +96,7 @@ func main() {
 
 	log.Printf("starcat-wiki-api starting on port %s", port)
 	log.Printf("Endpoints:")
+	log.Printf("  GET  /api/v1/ping                   - Connectivity probe for Starcat client")
 	log.Printf("  GET  /api/v1/wikis?owner=X&repo=Y  - Single probe")
 	log.Printf("  POST /api/v1/wikis/batch             - Batch probe (max 50, async)")
 	log.Printf("  POST /internal/sync/probe             - Manual sync trigger")
