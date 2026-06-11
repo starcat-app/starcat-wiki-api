@@ -1,3 +1,8 @@
+// Package main starcat-wiki-api 入口。
+//
+// v2 变更：
+//   - 启动时恢复 probing 中的任务
+//   - 注册错误重试定时任务
 package main
 
 import (
@@ -9,6 +14,7 @@ import (
 	"syscall"
 
 	"github.com/joho/godotenv"
+
 	"github.com/dong4j/starcat-wiki-api/internal/handler"
 	"github.com/dong4j/starcat-wiki-api/internal/middleware"
 	"github.com/dong4j/starcat-wiki-api/internal/probe"
@@ -51,11 +57,11 @@ func main() {
 	baseReq := probe.NewBaseRequest(ua)
 	probes := probe.DefaultRegistry(baseReq, enableRPC)
 
-	// Scheduler
-	sch := scheduler.New(sqliteStore)
-
 	// Handler
 	probeHandler := handler.NewProbeHandler(sqliteStore, probes)
+
+	// Scheduler（注入 retry 回调）
+	sch := scheduler.New(sqliteStore, probeHandler.RetryErrors)
 
 	// Bearer Auth
 	authMW := middleware.NewBearerAuth(apiKeys)
@@ -79,9 +85,19 @@ func main() {
 		os.Exit(0)
 	}()
 
+	// 启动定时任务
 	go sch.Start()
 
+	// v2: 启动恢复 probing 中的任务
+	go probeHandler.RecoverPendingProbes()
+
 	log.Printf("starcat-wiki-api starting on port %s", port)
+	log.Printf("Endpoints:")
+	log.Printf("  GET  /api/v1/wikis?owner=X&repo=Y  - Single probe")
+	log.Printf("  POST /api/v1/wikis/batch             - Batch probe (max 50, async)")
+	log.Printf("  POST /internal/sync/probe             - Manual sync trigger")
+	log.Printf("  POST /internal/refresh/owner          - Owner refresh")
+	log.Printf("  GET  /healthz                         - Health check")
 	log.Fatal(http.ListenAndServe(":"+port, mux))
 }
 

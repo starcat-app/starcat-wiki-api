@@ -43,19 +43,19 @@ func TestCodeWikiProbe(t *testing.T) {
 
 			if res.Status != tt.wantStatus {
 				t.Errorf(
-					"Probe(%s/%s): status = %v, want %v (confidence=%s, error=%s, httpStatus=%v, signals=%v)",
+					"Probe(%s/%s): status = %v, want %v (error=%s, httpStatus=%v, signals=%v)",
 					tt.owner, tt.repo,
 					res.Status, tt.wantStatus,
-					res.Confidence, res.Error,
+					res.Error,
 					res.HTTPStatus, res.MatchedSignals,
 				)
 				return
 			}
 
 			t.Logf(
-				"✓ %s/%s → status=%s confidence=%s method=%s signals=%v url=%s",
+				"✓ %s/%s → status=%s method=%s signals=%v url=%s",
 				tt.owner, tt.repo,
-				res.Status, res.Confidence,
+				res.Status,
 				res.ProbeMethod, res.MatchedSignals,
 				res.URL,
 			)

@@ -20,13 +20,12 @@ func (p *ZreadProbe) Source() Source { return SourceZread }
 func (p *ZreadProbe) Name() string   { return "Zread" }
 
 func (p *ZreadProbe) Probe(ctx context.Context, owner, repo string) ProbeResult {
-	// API 端点: https://zread.ai/api/v1/repo/github/owner/repo
 	apiURL := fmt.Sprintf("https://zread.ai/api/v1/repo/github/%s/%s", owner, repo)
 	pageURL := fmt.Sprintf("https://zread.ai/%s/%s", owner, repo)
 
 	result := ProbeResult{
 		Source:      p.Source(),
-		URL:         pageURL, // 结果展示仍用展示页 URL
+		URL:         pageURL,
 		ProbeMethod: "json_api",
 	}
 
@@ -42,13 +41,14 @@ func (p *ZreadProbe) Probe(ctx context.Context, owner, repo string) ProbeResult 
 
 	if resp.StatusCode != http.StatusOK {
 		result.Status = StatusError
+		result.Error = fmt.Sprintf("http_%d", resp.StatusCode)
 		return result
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		result.Status = StatusUnknown
-		result.Error = "read_body_error"
+		result.Status = StatusError
+		result.Error = fmt.Sprintf("read_body_error: %v", err)
 		return result
 	}
 
@@ -59,23 +59,20 @@ func (p *ZreadProbe) Probe(ctx context.Context, owner, repo string) ProbeResult 
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &envelope); err != nil {
-		// 如果失败,尝试记录前 100 字符帮助排查
 		snippet := string(body)
 		if len(snippet) > 100 {
 			snippet = snippet[:100]
 		}
-		result.Status = StatusUnknown
+		result.Status = StatusError
 		result.Error = fmt.Sprintf("json_decode_error: %s", snippet)
 		return result
 	}
 
 	if envelope.Data.Status == "success" {
 		result.Status = StatusIndexed
-		result.Confidence = "high"
 		result.MatchedSignals = []string{"api_status_success"}
 	} else {
 		result.Status = StatusNotIndexed
-		result.Confidence = "high"
 		result.MatchedSignals = []string{"api_status_" + envelope.Data.Status}
 	}
 

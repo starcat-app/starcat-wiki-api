@@ -43,10 +43,10 @@ func TestZreadProbe(t *testing.T) {
 
 			if res.Status != tt.wantStatus {
 				t.Errorf(
-					"Probe(%s/%s): status = %v, want %v (confidence=%s, error=%s, httpStatus=%v)",
+					"Probe(%s/%s): status = %v, want %v (, error=%s, httpStatus=%v)",
 					tt.owner, tt.repo,
 					res.Status, tt.wantStatus,
-					res.Confidence, res.Error,
+					res.Error,
 					res.HTTPStatus,
 				)
 				return
@@ -54,10 +54,9 @@ func TestZreadProbe(t *testing.T) {
 
 			// 成功时打印结果方便肉眼确认
 			t.Logf(
-				"✓ %s/%s → status=%s confidence=%s signals=%v url=%s",
+				"✓ %s/%s → status=%s signals=%v url=%s",
 				tt.owner, tt.repo,
-				res.Status, res.Confidence,
-				res.MatchedSignals, res.URL,
+				res.Status, res.MatchedSignals, res.URL,
 			)
 		})
 	}
