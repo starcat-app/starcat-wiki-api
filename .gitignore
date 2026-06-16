@@ -27,3 +27,4 @@ coverage.html
 .vscode/
 *.swp
 *.swo
+*.log
