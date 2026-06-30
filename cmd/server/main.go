@@ -102,7 +102,8 @@ func main() {
 	log.Printf("  POST /internal/sync/probe             - Manual sync trigger")
 	log.Printf("  POST /internal/refresh/owner          - Owner refresh")
 	log.Printf("  GET  /healthz                         - Health check")
-	log.Fatal(http.ListenAndServe(":"+port, mux))
+	handler := middleware.CORS(mux)
+	log.Fatal(http.ListenAndServe(":"+port, handler))
 }
 
 func healthzHandler(w http.ResponseWriter, r *http.Request) {
