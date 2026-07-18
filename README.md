@@ -53,93 +53,93 @@ brew install --cask starcat
 > Starcat provides hosted defaults for normal users. This API is open source so advanced users can inspect it, run it locally, or deploy their own instance.
 <!-- starcat-promo:end -->
 
-外部文档站索引探测服务，探测 DeepWiki / Zread / Google Code Wiki 是否已索引某个 GitHub 仓库，返回跳转链接。
+An external documentation index probe that checks whether DeepWiki, Zread, or Google Code Wiki has indexed a GitHub repository and returns the corresponding links.
 
-> **v2**（2026-06-11）：状态简化 + probing 预占位 + 按源限速并行探测 + 错误分类重试 + 宕机恢复。
+> **v2** (2026-06-11): simplified statuses + probing placeholders + parallel probes with per-source rate limits + error-aware retries + crash recovery.
 
-## 特性
+## Features
 
-- **三源探测**：DeepWiki（json_api）、Zread（json_api）、Google Code Wiki（batchexecute RPC）
-- **SWR 缓存**：Stale-While-Revalidate，冷启动同步探测，过期数据异步刷新
-- **v2 Batch 异步**：先入库 probing → 秒返响应 → 3 个独立 source worker 并行探测
-- **v2 按源限速**：每个 wiki 站独立间隔控制（默认 1s），互不影响
-- **v2 错误重试**：network/timeout → 重试，429 → 长间隔重试，403 → 直接放弃
-- **v2 宕机恢复**：启动时自动恢复 probing 中的任务
-- **Bearer Token 鉴权**：所有 `/api/v1/*` 端点强制鉴权
+- **Three-source probing**: DeepWiki (`json_api`), Zread (`json_api`), and Google Code Wiki (`batchexecute` RPC)
+- **SWR cache**: Stale-While-Revalidate with synchronous cold-start probes and asynchronous refreshes for stale data
+- **v2 asynchronous batch processing**: store `probing` placeholders first → return immediately → probe in parallel with three independent source workers
+- **v2 per-source rate limits**: each wiki source has an independent request interval (1s by default)
+- **v2 error retries**: retry network errors and timeouts → retry 429 responses after a longer interval → stop immediately on 403 responses
+- **v2 crash recovery**: automatically resume `probing` tasks at startup
+- **Bearer Token authentication**: authentication is required for every `/api/v1/*` endpoint
 
-## 快速开始
+## Quick Start
 
-### 环境要求
+### Requirements
 
 - Go 1.25+
 
-### 本地运行
+### Run Locally
 
 ```bash
 cp .env.example .env
-# 编辑 .env，填入 API_KEYS
+# Edit .env and set API_KEYS
 cd starcat-wiki-api
 go run ./cmd/server/
 ```
 
-默认端口 `5004`。
+The default port is `5004`.
 
-### .env 配置
+### .env Configuration
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `PORT` | 服务端口 | `5004` |
-| `STORE_FILE` | SQLite 数据库路径 | `./wiki.db` |
-| `API_KEYS` | Bearer Token 白名单（逗号分隔） | 必填 |
-| `PROBE_USER_AGENT` | HTTP 请求 UA | Chrome 126 |
-| `ENABLE_CODEWIKI_BATCHEXECUTE` | 启用 CodeWiki RPC 精确探测 | `false` |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | Server port | `5004` |
+| `STORE_FILE` | SQLite database path | `./wiki.db` |
+| `API_KEYS` | Comma-separated Bearer Token allowlist | Required |
+| `PROBE_USER_AGENT` | HTTP request User-Agent | Chrome 126 |
+| `ENABLE_CODEWIKI_BATCHEXECUTE` | Enable precise probing through the CodeWiki RPC | `false` |
 
-#### 缓存 TTL
+#### Cache TTL
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `CACHE_INDEXED_TTL_HOURS` | indexed 缓存时长 | `168`（7 天） |
-| `CACHE_NOT_INDEXED_TTL_HOURS` | not_indexed 缓存时长 | `24` |
-| `CACHE_PROBING_TTL_MINUTES` | probing 超时（卡死恢复） | `10` |
-| `CACHE_ERROR_TTL_MINUTES` | error 缓存时长 | `30` |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `CACHE_INDEXED_TTL_HOURS` | Cache lifetime for `indexed` results | `168` (7 days) |
+| `CACHE_NOT_INDEXED_TTL_HOURS` | Cache lifetime for `not_indexed` results | `24` |
+| `CACHE_PROBING_TTL_MINUTES` | `probing` timeout for stalled-task recovery | `10` |
+| `CACHE_ERROR_TTL_MINUTES` | Cache lifetime for `error` results | `30` |
 
-#### 按源限速
+#### Per-Source Rate Limits
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `PROBE_ZREAD_INTERVAL_MS` | zread 请求间隔 (ms) | `1000` |
-| `PROBE_DEEPWIKI_INTERVAL_MS` | deepwiki 请求间隔 (ms) | `1000` |
-| `PROBE_CODEWIKI_INTERVAL_MS` | codewiki 请求间隔 (ms) | `1000` |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PROBE_ZREAD_INTERVAL_MS` | Zread request interval (ms) | `1000` |
+| `PROBE_DEEPWIKI_INTERVAL_MS` | DeepWiki request interval (ms) | `1000` |
+| `PROBE_CODEWIKI_INTERVAL_MS` | CodeWiki request interval (ms) | `1000` |
 
-#### 重试策略
+#### Retry Policy
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `RETRY_MAX_ATTEMPTS` | 最大重试次数（超过→not_indexed） | `3` |
-| `RETRY_INTERVAL_MINUTES` | 重试间隔（分钟，429 用 4 倍） | `30` |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RETRY_MAX_ATTEMPTS` | Maximum retry attempts before marking a result `not_indexed` | `3` |
+| `RETRY_INTERVAL_MINUTES` | Retry interval in minutes (4× longer for 429 responses) | `30` |
 
-## API 接口
+## API
 
-所有数据接口需要 `Authorization: Bearer <api-key>` 头。
+All data endpoints require an `Authorization: Bearer <api-key>` header.
 
-### `GET /api/v1/wikis?owner=X&repo=Y`（需鉴权）
+### `GET /api/v1/wikis?owner=X&repo=Y` (Authentication Required)
 
-探测单个 GitHub 仓库。
+Probe a single GitHub repository.
 
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| `owner` | string | 仓库所有者 |
-| `repo` | string | 仓库名 |
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `owner` | string | Repository owner |
+| `repo` | string | Repository name |
 
-探测逻辑（SWR）：
+Probe behavior (SWR):
 
-| 场景 | 行为 | `cache_status` |
-|------|------|---------------|
-| 无缓存 | 同步探测 3 源，写入 DB | `cold` |
-| 缓存新鲜 | 直接返回缓存 | `fresh` |
-| 缓存过期 | 返回过期缓存 + 后台异步刷新 | `stale` |
+| Scenario | Behavior | `cache_status` |
+|----------|----------|----------------|
+| No cache | Probe all three sources synchronously and write the results to the database | `cold` |
+| Fresh cache | Return the cached results immediately | `fresh` |
+| Stale cache | Return the stale results and refresh them asynchronously in the background | `stale` |
 
-**响应 200**：
+**200 response**:
 
 ```json
 {
@@ -174,20 +174,20 @@ go run ./cmd/server/
 }
 ```
 
-状态说明：
+Status reference:
 
-| status | 含义 |
-|--------|------|
-| `indexed` | 该 wiki 已收录此仓库 |
-| `not_indexed` | 该 wiki 未收录此仓库（或放弃重试后的终态） |
-| `probing` | **内部状态**，对外映射为 `not_indexed`，探测完成后更新 |
-| `error` | **内部状态**，对外映射为 `not_indexed`，等待定时重试 |
+| status | Meaning |
+|--------|---------|
+| `indexed` | The wiki has indexed the repository |
+| `not_indexed` | The wiki has not indexed the repository, or all retries have been exhausted |
+| `probing` | **Internal status** exposed as `not_indexed`; updated when the probe completes |
+| `error` | **Internal status** exposed as `not_indexed` while waiting for a scheduled retry |
 
-### `POST /api/v1/wikis/batch`（需鉴权）
+### `POST /api/v1/wikis/batch` (Authentication Required)
 
-批量探测（v2 异步）。
+Probe repositories in a batch (asynchronous in v2).
 
-**请求体**：
+**Request body**:
 
 ```json
 {
@@ -195,18 +195,18 @@ go run ./cmd/server/
 }
 ```
 
-- 最多 50 个 repo
-- 接口秒返（→0.02s），后台 3 个 source worker 并行探测
-- 已有新鲜缓存的直接返回，无缓存/过期的预入库 `probing` 后异步探测
+- Up to 50 repositories
+- The endpoint returns immediately (about 0.02s), while three source workers probe in parallel in the background
+- Fresh cached results are returned directly; repositories with no cache or stale entries are stored as `probing` before asynchronous probing begins
 
-**响应 200**：
+**200 response**:
 
 ```json
 {
   "schema_version": 1,
   "data": {
     "results": {
-      "facebook/react": [{ "...": "已有缓存的结果" }]
+      "facebook/react": [{ "...": "cached result" }]
     },
     "new_probes": 2
   },
@@ -216,80 +216,80 @@ go run ./cmd/server/
 }
 ```
 
-### `POST /internal/sync/probe`（需鉴权，Admin）
+### `POST /internal/sync/probe` (Authentication Required, Admin)
 
-手动触发探测同步（预留）。
+Manually trigger probe synchronization (reserved).
 
-### `POST /internal/refresh/owner`（需鉴权，Admin）
+### `POST /internal/refresh/owner` (Authentication Required, Admin)
 
-手动刷新指定 owner 下所有 repo 的探测缓存（预留）。
+Manually refresh the probe cache for every repository owned by the specified owner (reserved).
 
-### `GET /healthz`（公开）
+### `GET /healthz` (Public)
 
-健康检查，返回 `ok`。
+Health check that returns `ok`.
 
-## 鉴权
+## Authentication
 
-所有 `/api/v1/*` 和 `/internal/*` 端点需要 `Authorization: Bearer <api-key>` 头。
+All `/api/v1/*` and `/internal/*` endpoints require an `Authorization: Bearer <api-key>` header.
 
-生成新 key：
+Generate a new key:
 
 ```bash
 bash ../scripts/gen-api-key.sh
 ```
 
-## 项目结构
+## Project Structure
 
 ```
 starcat-wiki-api/
-├── cmd/server/main.go              # 入口：装配 store + probes + scheduler
+├── cmd/server/main.go              # Entry point: wires the store, probes, and scheduler
 ├── internal/
-│   ├── probe/                      # 三源探测实现
-│   │   ├── types.go                #   状态、接口、错误分类
-│   │   ├── base.go                 #   HTTP 客户端 + UA
-│   │   ├── zread.go                #   Zread 探测
-│   │   ├── deepwiki.go             #   DeepWiki 探测
-│   │   └── codewiki.go             #   Google Code Wiki RPC 探测
-│   ├── store/                      # SQLite 持久化
-│   │   ├── store.go                #   接口定义
-│   │   ├── sqlite.go              #   实现 + v2 新增方法
-│   │   └── migrations.go          #   Schema + 兼容迁移
+│   ├── probe/                      # Three-source probe implementations
+│   │   ├── types.go                #   Statuses, interfaces, and error classification
+│   │   ├── base.go                 #   HTTP client and User-Agent
+│   │   ├── zread.go                #   Zread probe
+│   │   ├── deepwiki.go             #   DeepWiki probe
+│   │   └── codewiki.go             #   Google Code Wiki RPC probe
+│   ├── store/                      # SQLite persistence
+│   │   ├── store.go                #   Interface definitions
+│   │   ├── sqlite.go              #   Implementation and methods added in v2
+│   │   └── migrations.go          #   Schema and compatibility migrations
 │   ├── handler/                    # HTTP handler
-│   │   ├── handler.go             #   工具函数（JSON 响应）
-│   │   ├── probe.go               #   探测接口（GET/POST batch）+ 异步 worker
-│   │   ├── recover.go             #   启动恢复 probing 任务
-│   │   ├── retry.go               #   错误重试定时任务
+│   │   ├── handler.go             #   JSON response helpers
+│   │   ├── probe.go               #   Probe endpoints (GET/POST batch) and asynchronous workers
+│   │   ├── recover.go             #   Recovery of probing tasks at startup
+│   │   ├── retry.go               #   Scheduled error retries
 │   │   └── admin.go               #   Admin endpoint
-│   ├── scheduler/                  # cron 定时调度
-│   │   └── cron.go                #   过期刷新 + 错误重试
-│   ├── middleware/                 # Bearer 鉴权中间件
-│   └── model/                      # 数据模型（Envelope）
-├── .env.example                    # 配置模板
+│   ├── scheduler/                  # cron scheduling
+│   │   └── cron.go                #   Stale refreshes and error retries
+│   ├── middleware/                 # Bearer authentication middleware
+│   └── model/                      # Data models (Envelope)
+├── .env.example                    # Configuration template
 ├── Makefile
 └── Dockerfile
 ```
 
-## 探测流程
+## Probe Flow
 
 ```
 POST /api/v1/wikis/batch  {"repos": ["a/b", "c/d"]}
 │
-├─ Phase 1（同步，< 50ms）
-│   ├─ 查 DB：有新鲜缓存 → 加入响应
-│   └─ 无缓存/过期 → INSERT OR IGNORE 3 条 probing
+├─ Phase 1 (synchronous, < 50ms)
+│   ├─ Query DB: fresh cache → add to response
+│   └─ No cache/stale → INSERT OR IGNORE three probing rows
 │
-├─ Phase 2（同步）
-│   └─ 返回响应 { results: {...}, new_probes: N }
+├─ Phase 2 (synchronous)
+│   └─ Return { results: {...}, new_probes: N }
 │
-└─ Phase 3（异步，后台）
-    ├─ [worker.zread]    逐条探测 → sleep 1s → 下一条
-    ├─ [worker.deepwiki] 逐条探测 → sleep 1s → 下一条
-    └─ [worker.codewiki] 逐条探测 → sleep 1s → 下一条
+└─ Phase 3 (asynchronous, background)
+    ├─ [worker.zread]    Probe one row → sleep 1s → next row
+    ├─ [worker.deepwiki] Probe one row → sleep 1s → next row
+    └─ [worker.codewiki] Probe one row → sleep 1s → next row
         │
-        └─ 每条结果 → 更新 DB: probing → indexed / not_indexed / error
+        └─ For each result → update DB: probing → indexed / not_indexed / error
 ```
 
-## 部署（Fly.io）
+## Deployment (Fly.io)
 
 ```bash
 fly secrets set \
@@ -301,9 +301,9 @@ fly secrets set \
 fly deploy -a starcat-wiki-api
 ```
 
-## 技术选型
+## Technology
 
-- **net/http**：Go 标准库，无框架依赖
-- **modernc.org/sqlite**：纯 Go SQLite（无 CGO，可交叉编译）
-- **robfig/cron/v3**：定时调度（过期清理 + 错误重试）
-- **godotenv**：.env 文件加载
+- **net/http**: Go standard library with no framework dependency
+- **modernc.org/sqlite**: pure Go SQLite with no CGO dependency and cross-compilation support
+- **robfig/cron/v3**: scheduled stale-data cleanup and error retries
+- **godotenv**: `.env` file loading
