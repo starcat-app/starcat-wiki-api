@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dong4j/starcat-wiki-api/internal/scheduler"
+	"github.com/starcat-app/starcat-wiki-api/internal/scheduler"
 )
 
 func HandleAdminSyncProbe(sch *scheduler.Scheduler) http.HandlerFunc {

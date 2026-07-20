@@ -11,7 +11,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/dong4j/starcat-wiki-api/internal/probe"
+	"github.com/starcat-app/starcat-wiki-api/internal/probe"
 )
 
 func getEnvInt(key string, def int) int {

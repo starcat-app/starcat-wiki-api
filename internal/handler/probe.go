@@ -18,9 +18,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dong4j/starcat-wiki-api/internal/model"
-	"github.com/dong4j/starcat-wiki-api/internal/probe"
-	"github.com/dong4j/starcat-wiki-api/internal/store"
+	"github.com/starcat-app/starcat-wiki-api/internal/model"
+	"github.com/starcat-app/starcat-wiki-api/internal/probe"
+	"github.com/starcat-app/starcat-wiki-api/internal/store"
 )
 
 // ProbeHandler wiki 探测 HTTP 处理器。

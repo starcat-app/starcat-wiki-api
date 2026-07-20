@@ -11,7 +11,7 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"github.com/dong4j/starcat-wiki-api/internal/store"
+	"github.com/starcat-app/starcat-wiki-api/internal/store"
 )
 
 // RetryFunc 重试回调函数类型（由 handler 层注入）。

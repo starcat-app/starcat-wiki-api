@@ -16,7 +16,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/dong4j/starcat-wiki-api/internal/model"
+	"github.com/starcat-app/starcat-wiki-api/internal/model"
 )
 
 // TestHandlePingV1_OK 验证返回 200 + 正确 envelope。

@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 
-	"github.com/dong4j/starcat-wiki-api/internal/probe"
+	"github.com/starcat-app/starcat-wiki-api/internal/probe"
 )
 
 // Store 数据存储接口。

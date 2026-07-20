@@ -15,11 +15,11 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"github.com/dong4j/starcat-wiki-api/internal/handler"
-	"github.com/dong4j/starcat-wiki-api/internal/middleware"
-	"github.com/dong4j/starcat-wiki-api/internal/probe"
-	"github.com/dong4j/starcat-wiki-api/internal/scheduler"
-	"github.com/dong4j/starcat-wiki-api/internal/store"
+	"github.com/starcat-app/starcat-wiki-api/internal/handler"
+	"github.com/starcat-app/starcat-wiki-api/internal/middleware"
+	"github.com/starcat-app/starcat-wiki-api/internal/probe"
+	"github.com/starcat-app/starcat-wiki-api/internal/scheduler"
+	"github.com/starcat-app/starcat-wiki-api/internal/store"
 )
 
 func main() {
