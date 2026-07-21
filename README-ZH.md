@@ -122,6 +122,14 @@ go run ./cmd/server/
 
 所有数据接口需要 `Authorization: Bearer <api-key>` 头。
 
+### `GET /api/v1/ping`（需鉴权）
+
+返回服务标识，以及由发布 tag 注入的构建版本：
+
+```json
+{"schema_version":1,"data":{"service":"wiki","version":"1.2.3","ok":true}}
+```
+
 ### `GET /api/v1/wikis?owner=X&repo=Y`（需鉴权）
 
 探测单个 GitHub 仓库。

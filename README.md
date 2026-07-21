@@ -122,6 +122,14 @@ The default port is `5004`.
 
 All data endpoints require an `Authorization: Bearer <api-key>` header.
 
+### `GET /api/v1/ping` (Authentication Required)
+
+Returns the service identity and the build version injected from the release tag:
+
+```json
+{"schema_version":1,"data":{"service":"wiki","version":"1.2.3","ok":true}}
+```
+
 ### `GET /api/v1/wikis?owner=X&repo=Y` (Authentication Required)
 
 Probe a single GitHub repository.
