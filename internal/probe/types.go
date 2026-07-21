@@ -1,15 +1,17 @@
 // Package probe 定义 wiki 探测核心类型和接口。
 //
 // 状态简化（v2）：
-//   probing     — 已入库但尚未探测（批次预占位）
-//   indexed     — 已确认该 wiki 收录此仓库
-//   not_indexed — 已确认该 wiki 未收录此仓库（或放弃重试后的终态）
-//   error       — 探测失败，等待重试（attempt < max）
+//
+//	probing     — 已入库但尚未探测（批次预占位）
+//	indexed     — 已确认该 wiki 收录此仓库
+//	not_indexed — 已确认该 wiki 未收录此仓库（或放弃重试后的终态）
+//	error       — 探测失败，等待重试（attempt < max）
 //
 // 旧状态映射：
-//   probably_indexed → indexed
-//   unknown          → error（临时失败，可重试）或 not_indexed（JSON 解析失败直接判定）
-//   rate_limited     → error（429 可重试，403 不可重试 → not_indexed）
+//
+//	probably_indexed → indexed
+//	unknown          → error（临时失败，可重试）或 not_indexed（JSON 解析失败直接判定）
+//	rate_limited     → error（429 可重试，403 不可重试 → not_indexed）
 package probe
 
 import (
@@ -42,10 +44,10 @@ const (
 type ErrorCategory string
 
 const (
-	ErrNetwork   ErrorCategory = "network_error"   // 网络问题，可重试
-	ErrRateLimit ErrorCategory = "rate_limited"     // 429，更长间隔重试
-	ErrAntiCrawl ErrorCategory = "anti_crawl"       // 403，不可重试→not_indexed
-	ErrProbe     ErrorCategory = "probe_error"      // API 返回异常，可重试
+	ErrNetwork   ErrorCategory = "network_error" // 网络问题，可重试
+	ErrRateLimit ErrorCategory = "rate_limited"  // 429，更长间隔重试
+	ErrAntiCrawl ErrorCategory = "anti_crawl"    // 403，不可重试→not_indexed
+	ErrProbe     ErrorCategory = "probe_error"   // API 返回异常，可重试
 )
 
 // ProbeResult 单次探测结果。

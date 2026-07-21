@@ -297,9 +297,8 @@ func (h *ProbeHandler) handleProbeResult(
 			return
 		}
 
-			// 可重试错误 → 设置 attempt=1 + last_error + next_retry_at
-			// 后续重试由定时任务的 IncrementAndResetProbing 原子递增 attempt
-
+		// 可重试错误 → 设置 attempt=1 + last_error + next_retry_at
+		// 后续重试由定时任务的 IncrementAndResetProbing 原子递增 attempt
 
 		retryInterval := h.retryInterval
 		if category == probe.ErrRateLimit {

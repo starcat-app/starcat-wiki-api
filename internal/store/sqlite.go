@@ -226,36 +226,37 @@ func (s *SQLiteStore) GetPendingProbes(ctx context.Context) ([]ProbeRecord, erro
 	}
 	return records, nil
 }
-	// GetRetryableErrors 获取待重试的 error 记录（含 attempt）。
-	func (s *SQLiteStore) GetRetryableErrors(ctx context.Context, maxAttempts int) ([]ProbeRecordWithAttempt, error) {
-		now := time.Now().Format(time.RFC3339)
-		rows, err := s.db.QueryContext(ctx, `
+
+// GetRetryableErrors 获取待重试的 error 记录（含 attempt）。
+func (s *SQLiteStore) GetRetryableErrors(ctx context.Context, maxAttempts int) ([]ProbeRecordWithAttempt, error) {
+	now := time.Now().Format(time.RFC3339)
+	rows, err := s.db.QueryContext(ctx, `
 			SELECT owner, repo, source, attempt FROM doc_probes
 			WHERE status = 'error'
 			  AND attempt < ?
 			  AND (next_retry_at IS NULL OR next_retry_at <= ?)
 		`, maxAttempts, now)
-		if err != nil {
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []ProbeRecordWithAttempt
+	for rows.Next() {
+		var r ProbeRecordWithAttempt
+		if err := rows.Scan(&r.Owner, &r.Repo, &r.Source, &r.Attempt); err != nil {
 			return nil, err
 		}
-		defer rows.Close()
-
-		var records []ProbeRecordWithAttempt
-		for rows.Next() {
-			var r ProbeRecordWithAttempt
-			if err := rows.Scan(&r.Owner, &r.Repo, &r.Source, &r.Attempt); err != nil {
-				return nil, err
-			}
-			records = append(records, r)
-		}
-		return records, nil
+		records = append(records, r)
 	}
+	return records, nil
+}
 
-	// IncrementAndResetProbing 原子递增 attempt 并将 error 重置为 probing。
-	func (s *SQLiteStore) IncrementAndResetProbing(ctx context.Context, owner, repo string,
-		source probe.Source, nextRetryAt string) error {
+// IncrementAndResetProbing 原子递增 attempt 并将 error 重置为 probing。
+func (s *SQLiteStore) IncrementAndResetProbing(ctx context.Context, owner, repo string,
+	source probe.Source, nextRetryAt string) error {
 
-		_, err := s.db.ExecContext(ctx, `
+	_, err := s.db.ExecContext(ctx, `
 			UPDATE doc_probes SET
 				status = 'probing',
 				attempt = attempt + 1,
@@ -263,30 +264,29 @@ func (s *SQLiteStore) GetPendingProbes(ctx context.Context) ([]ProbeRecord, erro
 			WHERE owner = ? AND repo = ? AND source = ?
 		`, nextRetryAt, owner, repo, source)
 
-		return err
-	}
+	return err
+}
 
-	// AbandonMaxAttempts 将 attempt >= maxAttempts 的 error 记录标记为 not_indexed。
-	func (s *SQLiteStore) AbandonMaxAttempts(ctx context.Context, maxAttempts int) (int, error) {
-		checkedAt := time.Now().Format(time.RFC3339)
-		ttl := cacheTTL(probe.StatusNotIndexed)
-		expiresAt := time.Now().Add(ttl).Format(time.RFC3339)
+// AbandonMaxAttempts 将 attempt >= maxAttempts 的 error 记录标记为 not_indexed。
+func (s *SQLiteStore) AbandonMaxAttempts(ctx context.Context, maxAttempts int) (int, error) {
+	checkedAt := time.Now().Format(time.RFC3339)
+	ttl := cacheTTL(probe.StatusNotIndexed)
+	expiresAt := time.Now().Add(ttl).Format(time.RFC3339)
 
-		result, err := s.db.ExecContext(ctx, `
+	result, err := s.db.ExecContext(ctx, `
 			UPDATE doc_probes SET
 				status = 'not_indexed',
 				checked_at = ?,
 				expires_at = ?
 			WHERE status = 'error' AND attempt >= ?
 		`, checkedAt, expiresAt, maxAttempts)
-		if err != nil {
-			return 0, err
-		}
-
-		n, _ := result.RowsAffected()
-		return int(n), nil
+	if err != nil {
+		return 0, err
 	}
 
+	n, _ := result.RowsAffected()
+	return int(n), nil
+}
 
 // UpdateProbeResult 更新探测结果（probing/error → final）。
 func (s *SQLiteStore) UpdateProbeResult(ctx context.Context, owner, repo string,
