@@ -9,7 +9,7 @@
 
 ## 技术栈
 
-- Go 1.25.0 · `net/http`
+- Go 1.26.10 · `net/http`
 - `modernc.org/sqlite` · `github.com/robfig/cron/v3`
 - `github.com/starcat-app/starcat-api-kit` v0.3.0
 - `github.com/joho/godotenv`

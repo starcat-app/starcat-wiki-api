@@ -75,7 +75,7 @@ brew install --cask starcat
 
 ### 环境要求
 
-- Go 1.25+
+- Go 1.26.10+
 
 ### 本地运行
 

@@ -17,6 +17,10 @@
 
 ## [Unreleased]
 
+### Security
+
+- 升级 Go 工具链至 1.26.10，同步 CI、发布与 Docker 构建，并在 CI 检查已知可达漏洞。
+
 ### Added
 - **R-03 (2026-06-11)**：新增 `GET /api/v1/ping` 端点，专给 Starcat 客户端「测试连接」按钮用。
   - 走 BearerAuth 中间件，鉴权通过返回 200 + envelope `{data: {service: "wiki", ok: true}}`；

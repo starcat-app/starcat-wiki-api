@@ -1,6 +1,6 @@
 module github.com/starcat-app/starcat-wiki-api
 
-go 1.25.0
+go 1.26.10
 
 require (
 	github.com/joho/godotenv v1.5.1
