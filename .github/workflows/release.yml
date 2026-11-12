@@ -84,7 +84,7 @@ jobs:
       # 2. 安装与 go.yml 相同的 go.mod 工具链版本
       #    cache: true 复用 go mod 下载缓存, 加速重复构建
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
