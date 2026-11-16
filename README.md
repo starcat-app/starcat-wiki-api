@@ -75,7 +75,7 @@ An external documentation index probe that checks whether DeepWiki, Zread, or Go
 
 ### Requirements
 
-- Go 1.26.10+
+- Go 1.26.11+
 
 ### Run Locally
 
