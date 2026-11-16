@@ -2,62 +2,77 @@ package probe
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 )
 
-// TestZreadProbe 使用真实 Zread API 探测指定 GitHub 仓库是否已被索引。
-// 不依赖 mock，直接走网络请求。
-func TestZreadProbe(t *testing.T) {
-	// 使用真实 HTTP 客户端，自带 30s 超时和浏览器 UA
-	client := NewBaseRequest("")
-	probe := NewZreadProbe(client)
+type zreadRoundTripFunc func(*http.Request) (*http.Response, error)
 
+func (roundTrip zreadRoundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return roundTrip(request)
+}
+
+// TestZreadProbe 使用固定响应，避免上游仓库索引状态变化影响单测结果。
+func TestZreadProbe(testContext *testing.T) {
 	tests := []struct {
 		name       string
-		owner      string
-		repo       string
+		statusCode int
+		body       string
 		wantStatus Status
+		wantError  string
 	}{
 		{
-			name:       "已索引 — microsoft/vscode",
-			owner:      "microsoft",
-			repo:       "vscode",
+			name:       "已索引",
+			statusCode: http.StatusOK,
+			body:       "{\"code\":0,\"data\":{\"status\":\"success\"}}",
 			wantStatus: StatusIndexed,
 		},
 		{
-			name:       "未索引 — dong4j/self-star-list",
-			owner:      "dong4j",
-			repo:       "self-star-list",
+			name:       "未索引",
+			statusCode: http.StatusOK,
+			body:       "{\"code\":0,\"data\":{\"status\":\"failed\"}}",
 			wantStatus: StatusNotIndexed,
+		},
+		{
+			name:       "上游限流",
+			statusCode: http.StatusTooManyRequests,
+			wantStatus: StatusError,
+			wantError:  "http_429",
+		},
+		{
+			name:       "无效响应",
+			statusCode: http.StatusOK,
+			body:       "invalid JSON",
+			wantStatus: StatusError,
+			wantError:  "json_decode_error:",
 		},
 	}
 
-	for i, tt := range tests {
-		// 两个 case 之间稍微等一下，避免被限流
-		if i > 0 {
-			RandomDelay(300, 800)
-		}
-
-		t.Run(tt.name, func(t *testing.T) {
-			res := probe.Probe(context.Background(), tt.owner, tt.repo)
-
-			if res.Status != tt.wantStatus {
-				t.Errorf(
-					"Probe(%s/%s): status = %v, want %v (, error=%s, httpStatus=%v)",
-					tt.owner, tt.repo,
-					res.Status, tt.wantStatus,
-					res.Error,
-					res.HTTPStatus,
-				)
-				return
+	for _, testCase := range tests {
+		testContext.Run(testCase.name, func(caseContext *testing.T) {
+			client := NewBaseRequest("")
+			client.client.Transport = zreadRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+				if request.URL.String() != "https://zread.ai/api/v1/repo/github/microsoft/vscode" {
+					caseContext.Errorf("unexpected request URL: %s", request.URL)
+				}
+				return &http.Response{
+					StatusCode: testCase.statusCode,
+					Body:       io.NopCloser(strings.NewReader(testCase.body)),
+					Header:     make(http.Header),
+				}, nil
+			})
+			result := NewZreadProbe(client).Probe(context.Background(), "microsoft", "vscode")
+			if result.Status != testCase.wantStatus {
+				caseContext.Errorf("status = %s, want %s", result.Status, testCase.wantStatus)
 			}
-
-			// 成功时打印结果方便肉眼确认
-			t.Logf(
-				"✓ %s/%s → status=%s signals=%v url=%s",
-				tt.owner, tt.repo,
-				res.Status, res.MatchedSignals, res.URL,
-			)
+			if testCase.wantError != "" && !strings.HasPrefix(result.Error, testCase.wantError) {
+				caseContext.Errorf("error = %q, want prefix %q", result.Error, testCase.wantError)
+			}
+			if result.URL != "https://zread.ai/microsoft/vscode" {
+				caseContext.Errorf("URL = %q", result.URL)
+			}
 		})
 	}
 }
